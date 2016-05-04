@@ -64,6 +64,7 @@ class KafkaStatusValidation(SshValidation):
         leaders = [parsed[i] for i in xrange(2, len(parsed), 5)]
 
         tuples = zip(topics, leaders)
+        print "Tuples: " + tuples
         duplicates = [x for x, y in Counter(tuples).items() if y > 1]
 
         if len(duplicates) != 0:
@@ -73,3 +74,64 @@ class KafkaStatusValidation(SshValidation):
                               (", ".join("%s has %s" % (
                                   dup[0], dup[1])
                                          for dup in duplicates)))
+
+
+class KafkaConsumerLagMonitor(SshValidation):
+
+    """Validate that the Kafka cluster has all of it's partitions
+    distributed across the cluster.
+
+    :param ssh_contex: An SshContext class, for accessing the hosts.
+
+    :param zookeeper_nodes: Kafka zookeeper hosts and ports in CSV.
+      e.g. "host1:2181,host2:2181,host3:2181"
+
+    :param kafka_list_topic_command: Kafka command to list topics
+      (defaults to "/opt/kafka/bin/kafka-list-topic.sh")
+
+    :param priority: The Priority level of this validation.
+
+    :param timeout: How long to attempt to connect to the host.
+
+    :param hosts: The hosts to connect to.
+
+    """
+
+    def __init__(self, ssh_context,
+                 zookeeper_nodes,
+                 priority=Priority.NORMAL, timeout=None,
+                 hosts=None):
+        SshValidation.__init__(self, ssh_context,
+                               "Kafka Consumer Lag Monitor",
+                               priority=priority,
+                               timeout=timeout,
+                               hosts=hosts)
+        self.zookeeper_nodes = zookeeper_nodes
+
+    def perform_on_host(self, host):
+        """Runs kafka ConsumerOffsetChecker"""
+        output = run(
+            "/usr/local/kafka/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --group find_delivery" +
+            " --zkconnect " +
+            self.zookeeper_nodes)
+
+        error_patterns = [
+            'No such file', 'Missing required argument', 'Exception']
+        if any(x in output for x in error_patterns):
+            self.fail_on_host(host, "An exception occurred while " +
+                              "checking Kafka cluster health on {0} ({1})"
+                              .format((host, output)))
+        parsed = re.split(r'\t|\n', output)
+        topics = [parsed[i] for i in xrange(1, len(parsed), 7)]
+        pids = [parsed[i] for i in xrange(2, len(parsed), 5)]
+        lags = [parsed[i] for i in xrange(5, len(parsed), 7)]
+
+        tuples = zip(topics, pids, lags)
+        laggers = [x for x, y, z in Counter(tuples).items() if z > 0]
+
+        print(len(laggers))
+        if len(laggers) != 0:
+            self.fail_on_host(host, "Kafka consumers are lagging on topic " +
+                              (", ".join("%s on PID %s is lagging by %s messages." % (
+                                  lagger[0], lagger[1], lagger[2])
+                                         for lagger in laggers)))
