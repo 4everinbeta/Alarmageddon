@@ -9,6 +9,7 @@ import re
 from collections import Counter
 
 import logging
+import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,6 @@ class KafkaStatusValidation(SshValidation):
         leaders = [parsed[i] for i in xrange(2, len(parsed), 5)]
 
         tuples = zip(topics, leaders)
-        print "Tuples: " + tuples
         duplicates = [x for x, y in Counter(tuples).items() if y > 1]
 
         if len(duplicates) != 0:
@@ -96,9 +96,6 @@ class KafkaConsumerLagMonitor(SshValidation):
     :param hosts: The hosts to connect to.
 
     """
-    def flatten_list(nested_list):
-        print "In func"
-        return [val for sublist in nested_list for val in sublist]
 
     def __init__(self, ssh_context,
                  zookeeper_nodes,
@@ -127,13 +124,13 @@ class KafkaConsumerLagMonitor(SshValidation):
 
         parsed = re.split(r'\t|\r\n', output)
         parsed = [re.split(r'\s\s+', p) for p in parsed if len(re.split(r'\s\s+', p)) > 2]
-        topics = [item[1] for item in parsed]
-        pids = [item[2] for item in parsed]
-        lags = [item[5] for item in parsed]
+        topics = [item[1] for item in parsed if item[1] != 'Topic']
+        pids = [item[2] for item in parsed if item[2].isdigit()]
+        lags = [int(item[5]) for item in parsed if item[5].isdigit()]
 
         tuples = zip(topics, pids, lags)
-        laggers = [x for x, y, z in Counter(tuples).items() if z > 0]
-
+        laggers = [(x, y, z) for x, y, z in tuples if z >= 0]
+        print "Laggers: "
         print laggers
         if len(laggers) != 0:
             self.fail_on_host(host, "Kafka consumers are lagging on topic " +
