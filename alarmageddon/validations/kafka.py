@@ -78,16 +78,13 @@ class KafkaStatusValidation(SshValidation):
 
 class KafkaConsumerLagMonitor(SshValidation):
 
-    """Validate that the Kafka cluster has all of it's partitions
-    distributed across the cluster.
+    """Validate that the Kafka consumers are not lagging behind publication
+    too much.
 
     :param ssh_contex: An SshContext class, for accessing the hosts.
 
     :param zookeeper_nodes: Kafka zookeeper hosts and ports in CSV.
       e.g. "host1:2181,host2:2181,host3:2181"
-
-    :param kafka_list_topic_command: Kafka command to list topics
-      (defaults to "/opt/kafka/bin/kafka-list-topic.sh")
 
     :param priority: The Priority level of this validation.
 
@@ -119,7 +116,7 @@ class KafkaConsumerLagMonitor(SshValidation):
             'No such file', 'Missing required argument', 'Exception']
         if any(x in output for x in error_patterns):
             self.fail_on_host(host, "An exception occurred while " +
-                              "checking Kafka cluster health on {0} ({1})"
+                              "checking Kafka consumer lag on {0} ({1})"
                               .format((host, output)))
 
         parsed = re.split(r'\t|\r\n', output)
@@ -129,9 +126,7 @@ class KafkaConsumerLagMonitor(SshValidation):
         lags = [int(item[5]) for item in parsed if item[5].isdigit()]
 
         tuples = zip(topics, pids, lags)
-        laggers = [(x, y, z) for x, y, z in tuples if z >= 0]
-        print "Laggers: "
-        print laggers
+        laggers = [(x, y, z) for x, y, z in tuples if z > 5]
         if len(laggers) != 0:
             self.fail_on_host(host, "Kafka consumers are lagging on topic " +
                               (", ".join("%s on PID %s is lagging by %s messages." % (
