@@ -107,7 +107,7 @@ class SimpleEmailPublisher(Publisher):
     def __init__(self, sender_address, recipient_addresses,
                  host=None, port=None, name='EmailPublisher',
                  priority_threshold=None, connect_timeout_seconds=10,
-                 environment=None):
+                 environment=None, smtp_user=None, smtp_password=None):
 
         Publisher.__init__(self, name,
                            priority_threshold=priority_threshold,
@@ -125,6 +125,8 @@ class SimpleEmailPublisher(Publisher):
                 self.configure_recipients(recipient_addresses)
         self.host = host
         self.port = port
+        self.smtp_user = smtp_user
+        self.smtp_password = smtp_password
 
     def __repr__(self):
         return "{}: sender {}, recipient {}, host {}, port {}, timeout {}".format(
@@ -165,6 +167,10 @@ class SimpleEmailPublisher(Publisher):
                 are structured as a comma-separated list.
             """
             smtpObj = self.configure_smtp_object(self.host, self.port)
+            smtpObj.ehlo()
+            smtpObj.starttls()
+            smtpObj.ehlo()
+            smtpObj.login(self.smtp_user,self.smtp_password)
             smtpObj.sendmail(msg['From'],
                              self.recipient_addresses,
                              msg.as_string())

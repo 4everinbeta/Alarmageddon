@@ -86,6 +86,8 @@ class KafkaConsumerLagMonitor(SshValidation):
     :param zookeeper_nodes: Kafka zookeeper hosts and ports in CSV.
       e.g. "host1:2181,host2:2181,host3:2181"
 
+    :param kafka_lag_threshold: how much client lag will be tolerated. default is 5 messages
+
     :param priority: The Priority level of this validation.
 
     :param timeout: How long to attempt to connect to the host.
@@ -97,13 +99,15 @@ class KafkaConsumerLagMonitor(SshValidation):
     def __init__(self, ssh_context,
                  zookeeper_nodes,
                  priority=Priority.NORMAL, timeout=None,
-                 hosts=None):
+                 hosts=None,
+                 kafka_lag_threshold=5):
         SshValidation.__init__(self, ssh_context,
                                "Kafka Consumer Lag Monitor",
                                priority=priority,
                                timeout=timeout,
                                hosts=hosts)
         self.zookeeper_nodes = zookeeper_nodes
+        self.kafka_lag_threshold = kafka_lag_threshold
 
     def perform_on_host(self, host):
         """Runs kafka ConsumerOffsetChecker"""
@@ -126,7 +130,7 @@ class KafkaConsumerLagMonitor(SshValidation):
         lags = [int(item[5]) for item in parsed if item[5].isdigit()]
 
         tuples = zip(topics, pids, lags)
-        laggers = [(x, y, z) for x, y, z in tuples if z > 5]
+        laggers = [(x, y, z) for x, y, z in tuples if z > self.kafka_lag_threshold]
         if len(laggers) != 0:
             self.fail_on_host(host, "Kafka consumers are lagging on topic " +
                               (", ".join("%s on PID %s is lagging by %s messages." % (

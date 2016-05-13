@@ -45,7 +45,7 @@ class SshContext(object):
         """return a string representation of an SshContext object"""
         return "SSH Context {{ User: {0}, Key File: {1} }}"\
             .format(self.user, self.key_file)
-    
+
     def __repr__(self):
         return "{}: {} {}".format(type(self).__name__, self.user, self.key_file)
 
