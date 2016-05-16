@@ -167,10 +167,11 @@ class SimpleEmailPublisher(Publisher):
                 are structured as a comma-separated list.
             """
             smtpObj = self.configure_smtp_object(self.host, self.port)
-            smtpObj.ehlo()
-            smtpObj.starttls()
-            smtpObj.ehlo()
-            smtpObj.login(self.smtp_user,self.smtp_password)
+            if self.smtp_user != None and self.smtp_password != None:
+                smtpObj.ehlo()
+                smtpObj.starttls()
+                smtpObj.ehlo()
+                smtpObj.login(self.smtp_user,self.smtp_password)
             smtpObj.sendmail(msg['From'],
                              self.recipient_addresses,
                              msg.as_string())
