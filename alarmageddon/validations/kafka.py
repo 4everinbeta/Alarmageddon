@@ -99,20 +99,24 @@ class KafkaConsumerLagMonitor(SshValidation):
     def __init__(self, ssh_context,
                  zookeeper_nodes,
                  priority=Priority.NORMAL, timeout=None,
-                 hosts=None,
+                 group=None,topics=None,hosts=None,
                  kafka_lag_threshold=5):
         SshValidation.__init__(self, ssh_context,
                                "Kafka Consumer Lag Monitor",
                                priority=priority,
                                timeout=timeout,
                                hosts=hosts)
+        self.group = group
+        # self.topics = __format_topics(topics)
+        self.topics = topics
         self.zookeeper_nodes = zookeeper_nodes
         self.kafka_lag_threshold = kafka_lag_threshold
 
     def perform_on_host(self, host):
         """Runs kafka ConsumerOffsetChecker"""
+        args = self.__format_arguments(self.topics, self.group)
         output = run(
-            "/usr/local/kafka/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --group find_delivery" +
+            "/usr/local/kafka/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker" + args +
             " --zkconnect " +
             self.zookeeper_nodes)
 
@@ -124,15 +128,29 @@ class KafkaConsumerLagMonitor(SshValidation):
                               .format((host, output)))
 
         parsed = re.split(r'\t|\r\n', output)
-        parsed = [re.split(r'\s\s+', p) for p in parsed if len(re.split(r'\s\s+', p)) > 2]
+        parsed = [re.split(r'\s+', p) for p in parsed if len(re.split(r'\s\s+', p)) > 2]
         topics = [item[1] for item in parsed if item[1] != 'Topic']
+        print topics
         pids = [item[2] for item in parsed if item[2].isdigit()]
         lags = [int(item[5]) for item in parsed if item[5].isdigit()]
 
         tuples = zip(topics, pids, lags)
+        # print tuples
         laggers = [(x, y, z) for x, y, z in tuples if z > self.kafka_lag_threshold]
         if len(laggers) != 0:
             self.fail_on_host(host, "Kafka consumers are lagging on topic " +
                               (", ".join("%s on PID %s is lagging by %s messages." % (
                                   lagger[0], lagger[1], lagger[2])
                                          for lagger in laggers)))
+
+    def __format_topics(topics):
+        if topics:
+          ','.join([topic.strip() for topic in topics.split(',')])
+
+    def __format_arguments(self, topics, group):
+      out_string = ''
+      if topics:
+        out_string += ' --topic ' + topics
+      if group:
+        out_string += ' --group ' + group
+      return out_string
