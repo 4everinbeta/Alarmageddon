@@ -117,7 +117,7 @@ class KafkaConsumerLagMonitor(SshValidation):
         args = self.__format_arguments(self.topics, self.group)
         output = run(
             "/usr/local/kafka/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker" + args +
-            " --zkconnect " +
+            " --zookeeper " +
             self.zookeeper_nodes)
 
         error_patterns = [
